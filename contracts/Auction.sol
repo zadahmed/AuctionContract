@@ -4,33 +4,13 @@ pragma solidity ^0.8.14;
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "./AuctionStorage.sol";
 
 /**
  * @title Auction Contract
  * @dev Implements an upgradeable auction system for ERC20 tokens.
  */
-contract Auction is Initializable, OwnableUpgradeable {
-    // Represents a bid with the bidder's details, bid amount, and price per token.
-    struct Bid {
-        address bidder;
-        uint256 amount;
-        uint256 price;
-    }
-
-    // Represents an auction with token details, end time, total amount, and bids.
-    struct AuctionDetail {
-        IERC20Upgradeable token;
-        uint256 endTime;
-        uint256 amount;
-        Bid[] bids;
-    }
-
-    // Mapping of auctionId to its details.
-    mapping(uint256 => AuctionDetail) public auctions;
-
-    // Count of auctions initialized.
-    uint256 public auctionCount;
-
+contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
     /**
      * @dev Initializes the auction contract and sets up owner.
      */
@@ -46,7 +26,9 @@ contract Auction is Initializable, OwnableUpgradeable {
      * @param duration Duration of the auction in seconds.
      */
     function startAuction(address tokenAddress, uint256 amount, uint256 duration) external onlyOwner {
-        require(IERC20Upgradeable(tokenAddress).balanceOf(address(this)) >= amount, "Not enough tokens in contract");
+        if (IERC20Upgradeable(tokenAddress).balanceOf(address(this)) < amount) {
+            revert InsufficientTokensInContract();
+        }
         auctions[auctionCount].token = IERC20Upgradeable(tokenAddress);
         auctions[auctionCount].amount = amount;
         auctions[auctionCount].endTime = block.timestamp + duration;
@@ -60,9 +42,18 @@ contract Auction is Initializable, OwnableUpgradeable {
      * @param price Price per token.
      */
     function placeBid(uint256 auctionId, uint256 amount, uint256 price) external {
-        require(msg.sender != owner(), "Only non-owners can participate");
-        require(auctionId < auctionCount, "Invalid auctionId");
-        require(block.timestamp < auctions[auctionId].endTime, "Auction ended");
+        if (msg.sender == owner()) {
+            revert OwnerCannotParticipate();
+        }
+
+        if (auctionId >= auctionCount) {
+            revert InvalidAuctionId();
+        }
+
+        if (block.timestamp >= auctions[auctionId].endTime) {
+            revert AuctionEnded();
+        }
+
         // Logic to insert bids in descending order of price.
         uint256 index = auctions[auctionId].bids.length; // default to end
         for (uint256 i = 0; i < auctions[auctionId].bids.length;) {
@@ -89,8 +80,13 @@ contract Auction is Initializable, OwnableUpgradeable {
      * @param auctionId ID of the auction to be ended.
      */
     function endAuction(uint256 auctionId) external onlyOwner {
-        require(auctionId < auctionCount, "Invalid auctionId");
-        require(block.timestamp >= auctions[auctionId].endTime, "Auction not yet ended");
+        if (auctionId >= auctionCount) {
+            revert InvalidAuctionId();
+        }
+
+        if (block.timestamp < auctions[auctionId].endTime) {
+            revert AuctionNotYetEnded();
+        }
 
         if (auctions[auctionId].bids.length > 0) {
             Bid memory highestBid = auctions[auctionId].bids[0];
@@ -115,7 +111,9 @@ contract Auction is Initializable, OwnableUpgradeable {
         view
         returns (address bidder, uint256 amount, uint256 price)
     {
-        require(bidIndex < auctions[auctionId].bids.length, "Bid index out of bounds");
+        if (bidIndex >= auctions[auctionId].bids.length) {
+            revert BidIndexOutOfBounds();
+        }
         Bid memory bid = auctions[auctionId].bids[bidIndex];
         return (bid.bidder, bid.amount, bid.price);
     }

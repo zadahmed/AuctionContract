@@ -5,10 +5,12 @@
     "@openzeppelin/contracts-upgradeable": "^4.8.3",
     "chai": "^4.3.7",
     "ethers": "^5.7.2",
-    "hardhat": "^2.14.0"
+    "hardhat": "^2.14.0",
+    "ethereum-waffle": "^3.4.4"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@nomiclabs/hardhat-waffle": "^2.0.3",
     "@openzeppelin/hardhat-upgrades": "^1.22.1",
     "@types/chai": "^4.3.5",
     "@types/mocha": "^10.0.1",

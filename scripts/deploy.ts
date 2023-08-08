@@ -1,23 +1,29 @@
 import { ethers } from "hardhat";
 
-async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-  const unlockTime = currentTimestampInSeconds + ONE_YEAR_IN_SECS;
+async function main(): Promise<void> {
+  const [deployer] = await ethers.getSigners();
 
-  const lockedAmount = ethers.utils.parseEther("1");
+  console.log("Deploying contracts with the account:", deployer.address);
+  console.log("Account balance:", (await deployer.getBalance()).toString());
 
-  const Lock = await ethers.getContractFactory("Lock");
-  const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
+  // Deploying the mock ERC20 token 
+  const Token = await ethers.getContractFactory("MockERC20");
+  const token = await Token.deploy("Mock Token", "MTK");
+  await token.deployed();
+  console.log("Mock Token deployed to:", token.address);
 
-  await lock.deployed();
-
-  console.log(`Lock with 1 ETH and unlock timestamp ${unlockTime} deployed to ${lock.address}`);
+  // Deploying the Auction contract
+  const Auction = await ethers.getContractFactory("Auction");
+  const auction = await Auction.deploy();
+  await auction.deployed();
+  console.log("Auction deployed to:", auction.address);
+  await auction.initialize();
+  console.log("Auction initialized");
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

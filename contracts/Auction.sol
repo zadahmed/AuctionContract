@@ -54,47 +54,50 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
             revert AuctionEnded();
         }
 
-        // Logic to insert bids in descending order of price.
-        uint256 index = auctions[auctionId].bids.length; // default to end
-        for (uint256 i = 0; i < auctions[auctionId].bids.length;) {
-            if (price >= auctions[auctionId].bids[i].price) {
-                index = i;
-                break;
+        auctions[auctionId].bids.push(Bid({bidder: msg.sender, amount: amount, price: price}));
+    }
+
+    /**
+     * @dev Ends an auction and transfers tokens to bidders starting from the highest bid.
+     * @param auctionId ID of the auction to be ended.
+     */
+    function endAuction(uint256 auctionId) external onlyOwner {
+        if(auctionId >= auctionCount){
+            revert InvalidAuctionId();
+        }
+        if(block.timestamp <= auctions[auctionId].endTime){
+            revert AuctionNotYetEnded();
+        }
+
+        // Sort bids using insertion sort
+        for (uint256 i = 1; i < auctions[auctionId].bids.length; ) {
+            Bid memory key = auctions[auctionId].bids[i];
+            uint256 j = i;
+            while (j > 0 && auctions[auctionId].bids[j - 1].price < key.price) {
+                auctions[auctionId].bids[j] = auctions[auctionId].bids[j - 1];
+                j--;
+            }
+            auctions[auctionId].bids[j] = key;
+            unchecked {
+                i++;
+            }
+        }
+
+        // Transfer tokens starting with the highest bid
+        uint256 remainingTokens = auctions[auctionId].amount;
+        for (uint256 i = 0; i < auctions[auctionId].bids.length && remainingTokens > 0; ) {
+            uint256 transferAmount = (auctions[auctionId].bids[i].amount <= remainingTokens)
+                ? auctions[auctionId].bids[i].amount
+                : remainingTokens;
+            if (transferAmount > 0) {
+                auctions[auctionId].token.transfer(auctions[auctionId].bids[i].bidder, transferAmount);
+                remainingTokens -= transferAmount;
             }
             unchecked {
                 i++;
             }
         }
-        auctions[auctionId].bids.push(Bid({bidder: address(0), amount: 0, price: 0}));
-        for (uint256 j = auctions[auctionId].bids.length - 1; j > index;) {
-            auctions[auctionId].bids[j] = auctions[auctionId].bids[j - 1];
-            unchecked {
-                j--;
-            }
-        }
-        auctions[auctionId].bids[index] = Bid({bidder: msg.sender, amount: amount, price: price});
-    }
 
-    /**
-     * @dev Ends an auction and transfers tokens to the highest bidder.
-     * @param auctionId ID of the auction to be ended.
-     */
-    function endAuction(uint256 auctionId) external onlyOwner {
-        if (auctionId >= auctionCount) {
-            revert InvalidAuctionId();
-        }
-
-        if (block.timestamp < auctions[auctionId].endTime) {
-            revert AuctionNotYetEnded();
-        }
-
-        if (auctions[auctionId].bids.length > 0) {
-            Bid memory highestBid = auctions[auctionId].bids[0];
-            require(highestBid.amount <= auctions[auctionId].amount, "Bid amount exceeds auction amount");
-
-            auctions[auctionId].token.transfer(highestBid.bidder, highestBid.amount);
-            auctions[auctionId].amount -= highestBid.amount;
-        }
         delete auctions[auctionId].bids; // reset bids for gas refund
     }
 

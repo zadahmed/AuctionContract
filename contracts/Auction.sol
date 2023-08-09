@@ -4,13 +4,14 @@ pragma solidity ^0.8.14;
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "./AuctionStorage.sol";
 
 /**
  * @title Auction Contract
  * @dev Implements an upgradeable auction system for ERC20 tokens.
  */
-contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
+contract Auction is Initializable, OwnableUpgradeable, AuctionStorage, ReentrancyGuardUpgradeable {
     /**
      * @dev Initializes the auction contract and sets up owner.
      */
@@ -41,7 +42,7 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
      * @param amount Amount of tokens being bid for.
      * @param price Price per token.
      */
-    function placeBid(uint256 auctionId, uint256 amount, uint256 price) external payable {
+    function placeBid(uint256 auctionId, uint256 amount, uint256 price) external payable nonReentrant {
         if (msg.sender == owner()) {
             revert OwnerCannotParticipate();
         }
@@ -67,7 +68,7 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
      * @dev Ends an auction and transfers tokens to bidders starting from the highest bid.
      * @param auctionId ID of the auction to be ended.
      */
-    function endAuction(uint256 auctionId) external onlyOwner {
+    function endAuction(uint256 auctionId) external onlyOwner nonReentrant {
         if (auctionId >= auctionCount) {
             revert InvalidAuctionId();
         }
@@ -139,7 +140,7 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
     /// or wants to withdraw their bid for any reason. It refunds the `lockedAmount` associated
     /// with the bidder for the given auctionId.
     /// @param auctionId The ID of the auction for which the bidder wants to withdraw their bid.
-    function withdrawBid(uint256 auctionId) external {
+    function withdrawBid(uint256 auctionId) external nonReentrant {
         // Find the bid for this bidder and auctionId
         for (uint256 i = 0; i < auctions[auctionId].bids.length; i++) {
             if (auctions[auctionId].bids[i].bidder == msg.sender) {

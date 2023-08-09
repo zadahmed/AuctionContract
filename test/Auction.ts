@@ -25,6 +25,20 @@ describe("Auction", function () {
 
     await token.mint(owner.address, ethers.utils.parseEther("1000"));
     await token.transfer(auction.address, ethers.utils.parseEther("1000"));
+
+    // Transfer 10 ETH to addr1, addr2, and addr3 from the owner account.
+    await owner.sendTransaction({
+      to: addr1.address,
+      value: ethers.utils.parseEther("100"),
+    });
+    await owner.sendTransaction({
+      to: addr2.address,
+      value: ethers.utils.parseEther("100"),
+    });
+    await owner.sendTransaction({
+      to: addr3.address,
+      value: ethers.utils.parseEther("100"),
+    });
   });
 
   it("Should start an auction correctly", async function () {
@@ -41,16 +55,27 @@ describe("Auction", function () {
 
     await auction
       .connect(addr1)
-      .placeBid(0, ethers.utils.parseEther("10"), ethers.utils.parseEther("1"));
+      .placeBid(
+        0,
+        ethers.utils.parseEther("10"),
+        ethers.utils.parseEther("1"),
+        { value: ethers.utils.parseEther("10") }
+      );
     await auction
       .connect(addr2)
-      .placeBid(0, ethers.utils.parseEther("20"), ethers.utils.parseEther("2"));
+      .placeBid(
+        0,
+        ethers.utils.parseEther("20"),
+        ethers.utils.parseEther("2"),
+        { value: ethers.utils.parseEther("40") }
+      );
     await auction
       .connect(addr3)
       .placeBid(
         0,
         ethers.utils.parseEther("30"),
-        ethers.utils.parseEther("0.5")
+        ethers.utils.parseEther("0.5"),
+        { value: ethers.utils.parseEther("15") }
       );
 
     const bidCount = await auction.getBidCount(0);
@@ -94,10 +119,20 @@ describe("Auction", function () {
 
     await auction
       .connect(addr1)
-      .placeBid(0, ethers.utils.parseEther("10"), ethers.utils.parseEther("1"));
+      .placeBid(
+        0,
+        ethers.utils.parseEther("10"),
+        ethers.utils.parseEther("1"),
+        { value: ethers.utils.parseEther("10") }
+      );
     await auction
       .connect(addr2)
-      .placeBid(0, ethers.utils.parseEther("20"), ethers.utils.parseEther("2"));
+      .placeBid(
+        0,
+        ethers.utils.parseEther("20"),
+        ethers.utils.parseEther("2"),
+        { value: ethers.utils.parseEther("40") }
+      );
 
     await increaseTime(10); // move 10 seconds into the future
     await auction.connect(owner).endAuction(0);
@@ -107,7 +142,7 @@ describe("Auction", function () {
     );
   });
 
-  it("Should settle tokens to bidders in descending order of their prices", async function () {
+  it("Should settle tokens to bidders order of their bid prices", async function () {
     await auction.connect(owner).startAuction(
       token.address,
       ethers.utils.parseEther("45"),
@@ -119,22 +154,32 @@ describe("Auction", function () {
     // addr3: 30 tokens at 0.5 ETH each
     await auction
       .connect(addr1)
-      .placeBid(0, ethers.utils.parseEther("10"), ethers.utils.parseEther("1"));
+      .placeBid(
+        0,
+        ethers.utils.parseEther("10"),
+        ethers.utils.parseEther("1"),
+        { value: ethers.utils.parseEther("10") }
+      );
     await auction
       .connect(addr2)
-      .placeBid(0, ethers.utils.parseEther("20"), ethers.utils.parseEther("2"));
+      .placeBid(
+        0,
+        ethers.utils.parseEther("20"),
+        ethers.utils.parseEther("2"),
+        { value: ethers.utils.parseEther("40") }
+      );
     await auction
       .connect(addr3)
       .placeBid(
         0,
         ethers.utils.parseEther("5"),
-        ethers.utils.parseEther("0.5")
+        ethers.utils.parseEther("0.5"),
+        { value: ethers.utils.parseEther("2.5") }
       );
 
-    await increaseTime(10); // move 10 seconds into the future
+    await increaseTime(10); 
     await auction.connect(owner).endAuction(0);
 
-    // Check balances
     expect(await token.balanceOf(addr2.address)).to.equal(
       ethers.utils.parseEther("20")
     );
@@ -145,4 +190,23 @@ describe("Auction", function () {
       ethers.utils.parseEther("5")
     );
   });
+
+  it("Should lock funds correctly when placing bids", async function () {
+    await auction
+      .connect(owner)
+      .startAuction(token.address, ethers.utils.parseEther("100"), 10);
+
+    await auction
+      .connect(addr1)
+      .placeBid(
+        0,
+        ethers.utils.parseEther("10"),
+        ethers.utils.parseEther("1"),
+        { value: ethers.utils.parseEther("10") }
+      );
+
+    const bid = await auction.getBid(0, 0);
+    expect(bid.lockedAmount.eq(ethers.utils.parseEther("10"))).to.be.true;
+  });
+
 });

@@ -9,6 +9,7 @@ abstract contract AuctionStorage {
         address bidder;
         uint256 amount;
         uint256 price;
+        uint256 lockedAmount; 
     }
 
     // Represents an auction with token details, end time, total amount, and bids.
@@ -27,10 +28,12 @@ abstract contract AuctionStorage {
 
     // Custom errors
     error InsufficientTokensInContract();
+    error InsufficientFunds();
     error InvalidAuctionId();
     error AuctionEnded();
     error OwnerCannotParticipate();
     error BidAmountExceedsAuctionAmount();
     error AuctionNotYetEnded();
     error BidIndexOutOfBounds();
+    error BidNotFound();
 }

@@ -41,7 +41,7 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
      * @param amount Amount of tokens being bid for.
      * @param price Price per token.
      */
-    function placeBid(uint256 auctionId, uint256 amount, uint256 price) external {
+    function placeBid(uint256 auctionId, uint256 amount, uint256 price) external payable {
         if (msg.sender == owner()) {
             revert OwnerCannotParticipate();
         }
@@ -54,7 +54,13 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
             revert AuctionEnded();
         }
 
-        auctions[auctionId].bids.push(Bid({bidder: msg.sender, amount: amount, price: price}));
+        uint256 totalBidAmount = (amount * price) / 1e18;
+
+        if (msg.value < totalBidAmount) {
+            revert InsufficientFunds();
+        }
+
+        auctions[auctionId].bids.push(Bid({bidder: msg.sender, amount: amount, price: price, lockedAmount: msg.value}));
     }
 
     /**
@@ -62,15 +68,15 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
      * @param auctionId ID of the auction to be ended.
      */
     function endAuction(uint256 auctionId) external onlyOwner {
-        if(auctionId >= auctionCount){
+        if (auctionId >= auctionCount) {
             revert InvalidAuctionId();
         }
-        if(block.timestamp <= auctions[auctionId].endTime){
+        if (block.timestamp <= auctions[auctionId].endTime) {
             revert AuctionNotYetEnded();
         }
 
         // Sort bids using insertion sort
-        for (uint256 i = 1; i < auctions[auctionId].bids.length; ) {
+        for (uint256 i = 1; i < auctions[auctionId].bids.length;) {
             Bid memory key = auctions[auctionId].bids[i];
             uint256 j = i;
             while (j > 0 && auctions[auctionId].bids[j - 1].price < key.price) {
@@ -85,7 +91,7 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
 
         // Transfer tokens starting with the highest bid
         uint256 remainingTokens = auctions[auctionId].amount;
-        for (uint256 i = 0; i < auctions[auctionId].bids.length && remainingTokens > 0; ) {
+        for (uint256 i = 0; i < auctions[auctionId].bids.length && remainingTokens > 0;) {
             uint256 transferAmount = (auctions[auctionId].bids[i].amount <= remainingTokens)
                 ? auctions[auctionId].bids[i].amount
                 : remainingTokens;
@@ -97,8 +103,6 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
                 i++;
             }
         }
-
-        delete auctions[auctionId].bids; // reset bids for gas refund
     }
 
     /**
@@ -112,13 +116,13 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
     function getBid(uint256 auctionId, uint256 bidIndex)
         external
         view
-        returns (address bidder, uint256 amount, uint256 price)
+        returns (address bidder, uint256 amount, uint256 price, uint256 lockedAmount)
     {
         if (bidIndex >= auctions[auctionId].bids.length) {
             revert BidIndexOutOfBounds();
         }
         Bid memory bid = auctions[auctionId].bids[bidIndex];
-        return (bid.bidder, bid.amount, bid.price);
+        return (bid.bidder, bid.amount, bid.price, bid.lockedAmount);
     }
 
     /**
@@ -128,5 +132,24 @@ contract Auction is Initializable, OwnableUpgradeable, AuctionStorage {
      */
     function getBidCount(uint256 auctionId) external view returns (uint256) {
         return auctions[auctionId].bids.length;
+    }
+
+    /// @notice Allows a bidder to withdraw their locked funds for a specific auction.
+    /// @dev This function is meant for cases where the bidder either loses the auction
+    /// or wants to withdraw their bid for any reason. It refunds the `lockedAmount` associated
+    /// with the bidder for the given auctionId.
+    /// @param auctionId The ID of the auction for which the bidder wants to withdraw their bid.
+    function withdrawBid(uint256 auctionId) external {
+        // Find the bid for this bidder and auctionId
+        for (uint256 i = 0; i < auctions[auctionId].bids.length; i++) {
+            if (auctions[auctionId].bids[i].bidder == msg.sender) {
+                uint256 refundAmount = auctions[auctionId].bids[i].lockedAmount;
+                auctions[auctionId].bids[i].lockedAmount = 0; // Reset lockedAmount
+
+                payable(msg.sender).transfer(refundAmount);
+                return;
+            }
+        }
+        revert BidNotFound();
     }
 }
